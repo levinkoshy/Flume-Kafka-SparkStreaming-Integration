@@ -1,0 +1,39 @@
+import org.apache.spark.SparkConf
+import org.apache.spark.streaming._
+import org.apache.spark.streaming.flume._
+
+object FlumeStreamingDepartmentWordCount {
+        def main(args: Array[String]){
+     val conf = new SparkConf().setAppName("Flume Streaming Word Count").setMaster(args(0))
+     val ssc = new StreamingContext(conf,Seconds(30))
+
+     val stream = FlumeUtils.createPollingStream(ssc,args(1),args(2).toInt)
+
+     val messages = stream.map(s => new String(s.event.getBody.array()))
+     val departmentMessages = messages.
+     filter(x=> {
+        val endPoint = x.split(" ")(6)
+        endPoint.split("/")(1) == "department"
+     } )
+     val departments = departmentMessages.
+     map(x=>{
+      val endPoint = x.split(" ")(6)
+      (endPoint.split("/")(2),1)
+      } )
+
+     val departmentTraffic =  departments.reduceByKey((x,y)=>x+y)
+     departmentTraffic.saveAsTextFiles("/user/levinkoshy/deptwisetraffic/cnt")
+
+     ssc.start()
+     ssc.awaitTermination()
+   }
+}
+
+
+
+//The data we get on the web service will be in Flume properietery format; It should be converted into string format
+//each stream will have events; from event we just need to get the body
+
+spark-submit --class FlumeStreamingDepartmentWordCount --master yarn --conf spark.ui.port=12986 \
+ --jars "/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume-sink_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/spark/lib/spark-streaming-flume_2.10-1.6.2.jar,/usr/hdp/2.5.0.0-1245/flume/lib/commons-lang3-3.5.jar" \ 
+retail_2.11-1.0.jar yarn-client gw01.itversity.com 8123
